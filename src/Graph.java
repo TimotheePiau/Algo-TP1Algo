@@ -1,5 +1,8 @@
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Scanner;
 
 public class Graph<Label> 
 {
@@ -91,11 +94,58 @@ public class Graph<Label>
         }
     }
     
+    private static int literalToIndex(int literal)
+	{
+		if(literal<0)
+		{
+			return (-2*literal-1);
+		}
+		else
+		{
+			return (2*(literal-1));
+		}		
+	}
+	
+	private int indexToLiteral(int index)
+	{
+		if(index%2==0)
+		{
+			return index/2+1;
+		}
+		else
+		{
+			return (index+1)/(-2);
+		}
+	}
+    
+    public static Graph<String> graphFromFormula(String fileName) throws FileNotFoundException
+	{
+		
+		File formulaFile = new File(fileName);
+		Scanner formula = new Scanner(formulaFile);
+		
+		int size = formula.nextInt()*2;
+		
+		Graph<String> formulasGraph = new Graph<String>(size);
+		
+	    while (formula.hasNextInt()) 
+	    {
+	    	int literal1 = formula.nextInt(); 
+	    	int literal2 = formula.nextInt();
+	    	
+	    	formulasGraph.addArc( literalToIndex(-literal1), literalToIndex(literal2), "");
+	    	formulasGraph.addArc( literalToIndex(-literal2), literalToIndex(literal1), "");
+	    	
+	    }
+	    formula.close();
+	    return formulasGraph;
+	}
     // Modifier le sens de prioritée des listes?
     
     public int[][] parcoursProfondeur(int startIndex)
 	{
-		int currentDate = 1;
+		int currentDate[] = new int[1];
+		currentDate[0]=1;
 		
 		int parcours[][] = new int[this.cardinal][2];
 		
@@ -115,20 +165,20 @@ public class Graph<Label>
 		return parcours;
 	}
     
-    public void exploreAndDate(int currentIndex,int currentDate, int[][] parcours)
+    public void exploreAndDate(int currentIndex,int[] currentDate, int[][] parcours)	// Vive les wrappers qui servent à rien
 	{
-		if(parcours[currentIndex][1]!=-1)
+		if(parcours[currentIndex][0]!=-1)
 			return;
 		else
 		{
-			parcours[currentIndex][1]=currentDate;
-			currentDate++;
+			parcours[currentIndex][0]=currentDate[0];
+			currentDate[0]++;
 			for(Edge e : incidency.get(currentIndex))
 			{
-				exploreAndDate(e.source, currentDate, parcours);
+				exploreAndDate(e.destination, currentDate, parcours);
 			}
-			parcours[currentIndex][2]=currentDate;
-			currentDate++;
+			parcours[currentIndex][1]=currentDate[0];
+			currentDate[0]++;
 		}
 	}
     
@@ -149,7 +199,7 @@ public class Graph<Label>
     }
     
     //Methode Composantes fortements conexes
-    public ArrayList<ArrayList<Integer>> searchComposantesConexes()
+    public ArrayList<ArrayList<Integer>> composantesConexes()
     {
     	ArrayList<ArrayList<Integer>> composantesConexes = new ArrayList<ArrayList<Integer>>(cardinal);
     	
@@ -161,14 +211,17 @@ public class Graph<Label>
     	for(int i=0; i<cardinal; i++)
     	{
     		int actualMax = 0;
+    		int actualMaxIndex=-1;
     		for(int j=0; j<cardinal; j++)
     		{
-    			if( (dateParcours[j][2]>actualMax) && (dateParcours[j][2]<maxValue))
+    			if( (dateParcours[j][1]>actualMax) && (dateParcours[j][1]<maxValue))
     			{
-    				summitByResolvingDate.add(j);
-    				maxValue=dateParcours[j][2];
+    				actualMax=dateParcours[j][1];
+    				actualMaxIndex=j;
     			}
     		}
+    		summitByResolvingDate.add(actualMaxIndex);
+			maxValue=dateParcours[actualMaxIndex][1];
     	}
     	
     	Graph<Label> transposedGarph = this.graphT();
@@ -178,17 +231,15 @@ public class Graph<Label>
     	{
     		discoveredSummit[i] = false;
     	}
-    	int arbreIndex = 0;
     	
     	while( !summitByResolvingDate.isEmpty() )
 		{
     		
-    		arbreIndex++;
     		ArrayList<Integer> arbre = new ArrayList<Integer>();
     		explore( summitByResolvingDate.get(0), discoveredSummit, arbre, transposedGarph);
-    		composantesConexes.get(arbreIndex).add(arbre);
+    		composantesConexes.add(arbre);
     		
-    		for(int dS : arbre)
+    		for(Integer dS : arbre)
     		{
     			summitByResolvingDate.remove(dS);
     		}
@@ -198,7 +249,7 @@ public class Graph<Label>
     	return composantesConexes;
     }
     
-    public void explore(int startIndex, boolean[] discoveredSummit, ArrayList<Integer> arbre, Graph<Label> studiedGraph)
+    private void explore(int startIndex, boolean[] discoveredSummit, ArrayList<Integer> arbre, Graph<Label> studiedGraph)
 	{
 		int currentIndex = startIndex;
     	if(discoveredSummit[currentIndex])
@@ -209,9 +260,37 @@ public class Graph<Label>
 			arbre.add(currentIndex);
 			for(Edge e : studiedGraph.incidency.get(currentIndex))
 			{
-				explore(e.source, discoveredSummit, arbre, studiedGraph);
+				explore(e.destination, discoveredSummit, arbre, studiedGraph);
 			}
 		}
 	}
+    
+    public void verifySAT(ArrayList<ArrayList<Integer>> composantesConexes)
+    {
+    	int litCheck[] = new int[cardinal/2]; 
+    	
+    	
+    	for(ArrayList<Integer> cc : composantesConexes)
+    	{
+    		for (int i=0; i<(cardinal/2); i++)
+        	{
+        		litCheck[i]=0;
+        	}
+    		
+    		for (int lit : cc)
+    		{
+    			int litMem = this.indexToLiteral(lit);
+    			litCheck[Math.abs(litMem)-1]++;
+    			if(litCheck[Math.abs(litMem)-1]>1)
+    			{
+    				System.out.print("La formule Sat n'est pas satifaisable");
+    				return;
+    			}
+    		}
+    	}
+    	
+    	System.out.print("La formule SAT est satifaisable");
+    }
+   
 }
 
