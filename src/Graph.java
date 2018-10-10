@@ -6,7 +6,7 @@ import java.util.Scanner;
 
 public class Graph<Label> 
 {
-	// Classe Edge defini les arretes
+	// Classe Edge defini les arcs
     private class Edge 
     {
         public int source;
@@ -21,31 +21,34 @@ public class Graph<Label>
         }
     }
 
+    private int cardinal;								// Nombre de litteraux
+    private ArrayList<LinkedList<Edge>> incidency;		// Liste des listes d'adjacence de chacun des sommets
+
     
-    public int cardinal;
-    private ArrayList<LinkedList<Edge>> incidency;
-
-
+    // Contructeur de la classe Graph
     public Graph(int size) 
     {
         cardinal = size;
-        incidency = new ArrayList<LinkedList<Edge>>(size+1);  				//size+1???
+        incidency = new ArrayList<LinkedList<Edge>>(size+1);  				
         for (int i = 0;i<cardinal;i++) 
         {
             incidency.add(i, new LinkedList<Edge>());
         }
     }
-
+    
+    // "Get" de cardinal
     public int order() 
     {
         return cardinal;
     }
-
+    
+    // Méthode gérant l'ajout d'un nouvel arc au graphe
     public void addArc(int source, int dest, Label label) 
     {
         incidency.get(source).addLast(new Edge(source,dest,label));
     }
-
+    
+    // Méthode de formatage du graph en données lisibles (Renvoie un string contenant un arc par ligne" 
     public String toString() 
     {
         String result = new String("");
@@ -54,46 +57,15 @@ public class Graph<Label>
         {
             for (Edge e : incidency.get(i)) 
             {
-                result=result.concat(e.source + " " + e.destination + " " + e.label.toString() + "\n");          
+                result=result.concat(e.source + " -->" + e.destination + " " + e.label.toString() + "\n");          
             }
         }
         return result;
 
     }
-
-    public interface ArcFunction<Label,K> 
-    {
-        public K apply(int source, int dest, Label label, K accu);
-    }
-
-    public interface ArcConsumer<Label> 
-    {
-        public void apply(int source, int dest, Label label);
-    }
-
-    public <K> K foldEdges(ArcFunction<Label,K> f, K init) 
-    {
-        for (LinkedList<Edge> adj : this.incidency) 
-        {
-            for (Edge e : adj) 
-            {
-                init = f.apply(e.source, e.destination, e.label, init);
-            }
-        };
-        return init;
-    }
-
-    public void iterEdges(ArcConsumer<Label> f) 
-    {
-        for (LinkedList<Edge> adj : this.incidency) 
-        {
-            for (Edge e : adj) 
-            {
-                f.apply(e.source, e.destination, e.label);
-            }
-        }
-    }
     
+    // Methode d'indexation
+    // Fait correspondre un litteral a un index de la liste incidency
     private static int literalToIndex(int literal)
 	{
 		if(literal<0)
@@ -106,6 +78,8 @@ public class Graph<Label>
 		}		
 	}
 	
+    // Methode Inverse de literalToIndex
+    // Retourne le literral originel correspondant à l'index
 	private int indexToLiteral(int index)
 	{
 		if(index%2==0)
@@ -117,7 +91,8 @@ public class Graph<Label>
 			return (index+1)/(-2);
 		}
 	}
-    
+    // Methode de contruction du graphe
+	// Renvoie le graphe fini
     public static Graph<String> graphFromFormula(String fileName) throws FileNotFoundException
 	{
 		
@@ -140,8 +115,12 @@ public class Graph<Label>
 	    formula.close();
 	    return formulasGraph;
 	}
-    // Modifier le sens de prioritée des listes?
     
+    // Methode du parcours en profondeur classique
+    // Renvoie une matrice de taille [cardinal] x [2] contenant les dates de découverte et de fin
+    // Les lignes correspondent à chacun des sommet sur la même inexation que le graphe
+    // La première colonne [0] correspond a la date de decouverte
+    // La seconde colonne [1] correspond a la date de fin
     public int[][] parcoursProfondeur(int startIndex)
 	{
 		int currentDate[] = new int[1];
@@ -165,23 +144,25 @@ public class Graph<Label>
 		return parcours;
 	}
     
-    public void exploreAndDate(int currentIndex,int[] currentDate, int[][] parcours)	// Vive les wrappers qui servent à rien
+    // Méthode d'exploration recursive utilise par la méthode parcoursProfondeur
+    // Check si le sommet est découvert, si oui sort de la méthode, 
+    // si non enregiste la date de decouverte dans parcours et se relance recucivement sur les sommets adjacents
+    public void exploreAndDate(int currentIndex,int[] currentDate, int[][] parcours)	
 	{
 		if(parcours[currentIndex][0]!=-1)
 			return;
-		else
+		parcours[currentIndex][0]=currentDate[0];
+		currentDate[0]++;
+		for(Edge e : incidency.get(currentIndex))
 		{
-			parcours[currentIndex][0]=currentDate[0];
-			currentDate[0]++;
-			for(Edge e : incidency.get(currentIndex))
-			{
-				exploreAndDate(e.destination, currentDate, parcours);
-			}
-			parcours[currentIndex][1]=currentDate[0];
-			currentDate[0]++;
+			exploreAndDate(e.destination, currentDate, parcours);
 		}
+		parcours[currentIndex][1]=currentDate[0];
+		currentDate[0]++;
 	}
     
+    // Methode de transposition du graphe courrant
+    // Retourne un nouveau graphe correspondant à la transposé du graph initial
     public Graph<Label> graphT()
     {
     	Graph<Label> transposedGraph = new Graph<Label>(cardinal);
@@ -193,19 +174,18 @@ public class Graph<Label>
     		}
     	}
     	
-    	// methode de tri
-    	
     	return transposedGraph;
     }
     
-    //Methode Composantes fortements conexes
+    // Methode determinant les Composantes fortements conexes du graph
+    // Retourne une liste de composantes conexes elles même sous la forme d'une liste de sommets
     public ArrayList<ArrayList<Integer>> composantesConexes()
     {
-    	ArrayList<ArrayList<Integer>> composantesConexes = new ArrayList<ArrayList<Integer>>(cardinal);
+    	ArrayList<ArrayList<Integer>> composantesConexes = new ArrayList<ArrayList<Integer>>(cardinal);			// Variables utilisée pour le retour
     	
     	int dateParcours[][] = parcoursProfondeur(0);
     	
-    	ArrayList<Integer> summitByResolvingDate = new ArrayList<Integer>(cardinal);
+    	ArrayList<Integer> summitByResolvingDate = new ArrayList<Integer>(cardinal);			// Assimillable à une to do list qui contiendra les sommets par ordre de date de fin decroissante
     	int maxValue = cardinal * 2 + 1;
     	
     	for(int i=0; i<cardinal; i++)
@@ -226,7 +206,7 @@ public class Graph<Label>
     	
     	Graph<Label> transposedGarph = this.graphT();
     	
-    	boolean discoveredSummit[] = new boolean[cardinal];
+    	boolean discoveredSummit[] = new boolean[cardinal];							// Tableau definissant si un sommet à déjà été découvert
     	for (int i=0; i<cardinal; i++)
     	{
     		discoveredSummit[i] = false;
@@ -235,11 +215,11 @@ public class Graph<Label>
     	while( !summitByResolvingDate.isEmpty() )
 		{
     		
-    		ArrayList<Integer> arbre = new ArrayList<Integer>();
+    		ArrayList<Integer> arbre = new ArrayList<Integer>();									// Liste qui receuillera les differents sommets d'une composante fortement conexe
     		explore( summitByResolvingDate.get(0), discoveredSummit, arbre, transposedGarph);
     		composantesConexes.add(arbre);
     		
-    		for(Integer dS : arbre)
+    		for(Integer dS : arbre)																	// Les sommets traité sont enlevé de la 'to do liste'
     		{
     			summitByResolvingDate.remove(dS);
     		}
@@ -249,22 +229,27 @@ public class Graph<Label>
     	return composantesConexes;
     }
     
+    // Méthode d'exploration sans date
+    // Utilisé pour découvrir les composantes fortement conexes à partir du graphe transposé
+    // arbre corespond la composante conexe en train d'être explorée
     private void explore(int startIndex, boolean[] discoveredSummit, ArrayList<Integer> arbre, Graph<Label> studiedGraph)
 	{
 		int currentIndex = startIndex;
     	if(discoveredSummit[currentIndex])
 			return;
-		else
+		discoveredSummit[currentIndex]=true;
+		arbre.add(currentIndex);
+		for(Edge e : studiedGraph.incidency.get(currentIndex))
 		{
-			discoveredSummit[currentIndex]=true;
-			arbre.add(currentIndex);
-			for(Edge e : studiedGraph.incidency.get(currentIndex))
-			{
-				explore(e.destination, discoveredSummit, arbre, studiedGraph);
-			}
+			explore(e.destination, discoveredSummit, arbre, studiedGraph);
 		}
 	}
     
+    // Methode qui retourne si la formule 2 SAT est satisfiable
+    // Defini un tableau ou chaque case correspond à un litteral et à sa négation
+    // Parcours chacun des litteraux d'une composante conexe et compte dans la bonne case les occurence de chaque littéraux
+    // Si un compte est superieur a un cela signifie que un litteral et son contraire sont présent dans la même composante fortement conexe => Non satisfiable
+    // Affiche dans la console si la formule est satisfiable ou non
     public void verifySAT(ArrayList<ArrayList<Integer>> composantesConexes)
     {
     	int litCheck[] = new int[cardinal/2]; 
